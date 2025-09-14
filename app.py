@@ -1,6 +1,10 @@
 from flask import Flask, request, jsonify, make_response
+from flask import Flask, request, jsonify, make_response
 from flask_cors import CORS
 import os
+import requests
+from dotenv import load_dotenv
+import logging
 from models.legal_chat_model import get_legal_advice
 from utils.form_generator import generate_form
 from typing import Any, cast
@@ -94,6 +98,65 @@ def create_jwt(payload: dict[str, Any], expires_minutes: int = 60) -> str:
     if isinstance(token, bytes):
         token = token.decode('utf-8')
     return token
+# Load environment variables (.env locally, Render env in deployment)
+load_dotenv()
+
+# Flask app
+app = Flask(__name__)
+CORS(app)
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# --- New Google AI integration ---
+def call_google_ai(prompt: str):
+    api_key = os.environ.get("GOOGLE_API_KEY")
+    if not api_key:
+        raise ValueError("Missing GOOGLE_API_KEY in environment!")
+
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+
+    try:
+        response = requests.post(
+            url,
+            json={"contents": [{"parts": [{"text": prompt}]}]},
+            timeout=20
+        )
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        logger.error(f"Google AI API call failed: {e}")
+        return {"error": "Failed to call Google AI"}
+
+# --- New endpoint for testing Google AI ---
+@app.route("/google_ai", methods=["POST"])
+def google_ai():
+    data = request.get_json() or {}
+    prompt = data.get("prompt", "").strip()
+    if not prompt:
+        return jsonify({"error": "Prompt is required"}), 400
+
+    result = call_google_ai(prompt)
+    return jsonify(result)
+
+# --- Root + Health Check ---
+@app.route("/", methods=["GET"])
+def root():
+    return make_response(
+        "<h2>NyaySetu Legal Aid API</h2><p>Status: healthy. Use <code>/google_ai</code> to test Google AI.</p>",
+        200
+    )
+
+@app.route("/health", methods=["GET"])
+def health_check():
+    return jsonify({"status": "healthy", "service": "NyaySetu API"})
+
+# --- Run App ---
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    debug = os.environ.get("FLASK_ENV", "") == "development"
+    app.run(host="0.0.0.0", port=port, debug=debug)
 
 def decode_jwt(token: str) -> dict[str, Any] | None:
     if jwt is None:
@@ -195,18 +258,28 @@ def chat():
         answer = None
 
         # --- Use Grok-1 as default ---
-        try:
-            from models.legal_chat_model import get_grok1_answer
-            answer = get_grok1_answer(question)
-            if answer and not answer.startswith("Grok-1 error") and not answer.startswith("Grok-1 model not available"):
-                logger.info("Got answer from Grok-1 model")
-        except Exception as grok_err:
-            logger.warning(f"Grok-1 failed: {grok_err}")
+        # --- Use Gemini as default ---
+try:
+    api_key = os.environ.get("GOOGLE_API_KEY")
+    if not api_key:
+        raise RuntimeError("Missing GOOGLE_API_KEY in environment")
 
-        # Fallback to local legal model if Grok-1 fails
-        if not answer or answer.startswith("Grok-1 error") or answer.startswith("Grok-1 model not available"):
-            try:
-                answer = get_legal_advice(question, language)
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={api_key}"
+    resp = requests.post(
+        url,
+        json={"contents": [{"parts": [{"text": question}]}]},
+        timeout=20
+    )
+    resp.raise_for_status()
+    data = resp.json()
+    answer = data["candidates"][0]["content"]["parts"][0]["text"]
+    logger.info("Got answer from Gemini model")
+except Exception as gemini_err:
+    logger.warning(f"Gemini failed: {gemini_err}")
+        if not answer or answer.startswith("Gemini error") or answer.startswith("Gemini model not available"):
+        # Fallback to local legal model if Gemini fails
+        try:
+            answer = get_legal_advice(question, language)
                 logger.info("Got answer from local legal model")
             except Exception as local_err:
                 logger.warning(f"Local legal model failed: {local_err}")
