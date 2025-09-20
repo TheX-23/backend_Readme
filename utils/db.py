@@ -3,7 +3,7 @@ import json
 import sqlite3
 from typing import Any, Dict, List, Optional
 
-
+from db import set_verification_token
 # Resolve database path. Defaults to a file next to the backend folder.
 _DEFAULT_DB_PATH = os.environ.get(
     "NYAYSETU_DB_PATH",
