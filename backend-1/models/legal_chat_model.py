@@ -46,14 +46,29 @@ class LegalAdviceGenerator:
 
         self.language_responses = {
             'en': {
-                'greeting': "Hello! I'm here to help you with legal advice.",
-                'property': "For property-related legal issues, you may need to consult a property lawyer.",
-                'criminal': "For criminal matters, it's crucial to seek immediate legal counsel.",
-                'family': "Family law matters require specialized legal expertise.",
-                'employment': "Employment law issues should be addressed with an employment lawyer.",
-                'consumer': "Consumer protection laws can help resolve your issue.",
-                'civil': "Civil law matters may require legal representation.",
-                'general': "Based on your question, I recommend consulting with a qualified lawyer."
+        'property': ['property', 'land', 'house', 'real estate', 'ownership', 'tenant', 'landlord'],
+        'criminal': ['crime', 'theft', 'assault', 'fraud', 'harassment', 'cybercrime', 'police', 'fir'],
+        'family': ['marriage', 'divorce', 'custody', 'maintenance', 'inheritance', 'adoption', 'alimony'],
+        'employment': ['job', 'salary', 'termination', 'discrimination', 'harassment', 'contract', 'pf'],
+        'consumer': ['refund', 'warranty', 'deficiency', 'service', 'product', 'complaint', 'consumer court'],
+        'civil': ['contract', 'agreement', 'breach', 'damages', 'compensation', 'suit', 'dispute'],
+        'intellectual_property': ['copyright', 'patent', 'trademark', 'ip', 'infringement', 'royalty', 'piracy'],
+        'taxation': ['tax', 'gst', 'income tax', 'tds', 'itr', 'customs duty', 'tax evasion'],
+        'corporate': ['company', 'startup', 'incorporation', 'director', 'shareholder', 'merger', 'compliance'],
+        'immigration': ['visa', 'passport', 'citizenship', 'immigration', 'deportation', 'oci', 'frro'],
+        'cyber': ['hacking', 'phishing', 'data privacy', 'it act', 'online fraud', 'social media', 'identity theft'],
+        'torts': ['negligence', 'defamation', 'nuisance', 'trespass', 'liability', 'accident', 'personal injury'],
+        'constitutional': ['constitution', 'fundamental rights', 'writ', 'petition', 'judiciary', 'government', 'pil'],
+        'banking': ['bank', 'loan', 'cheque', 'bouncing', 'mortgage', 'foreclosure', 'account', 'npa', 'rbi'],
+        'motor_vehicles': ['traffic', 'challan', 'accident', 'driving license', 'vehicle', 'insurance', 'fine', 'rc'],
+        'arbitration': ['arbitration', 'mediation', 'conciliation', 'dispute resolution', 'award', 'settlement'],
+        'medical': ['medical negligence', 'doctor', 'hospital', 'malpractice', 'patient rights', 'misdiagnosis'],
+        'insurance': ['insurance', 'claim', 'policy', 'premium', 'coverage', 'life insurance', 'health insurance'],
+        'rti': ['rti', 'right to information', 'pio', 'first appeal', 'information commission'],
+        'insolvency': ['bankruptcy', 'insolvency', 'debt', 'creditor', 'liquidation', 'ibc'],
+        'human_rights': ['human rights', 'violation', 'commission', 'nhrc', 'shrc', 'fundamental rights']
+   
+                
             },
-            # ✅ keep the rest of your multilingual dictionary as-is...
+
         }
