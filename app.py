@@ -15,6 +15,7 @@ from utils.db import (
     get_user_by_email,
     get_user_by_verification_token,
     set_user_verified,
+    set_verification_token,
 )
 from utils.auth import send_verification_email
 import logging
@@ -385,9 +386,13 @@ def register():
 
         base_url = os.environ.get('APP_BASE_URL', 'http://localhost:5000')
         verify_link = f"{base_url}/auth/verify?token={verification_token}"
+        email_sent = False
+        email_error = None
         try:
             send_verification_email(email, verify_link)
+            email_sent = True
         except Exception as e:
+            email_error = str(e)
             logger.error(f"Email send failed: {e}")
 
         smtp_host = os.environ.get('SMTP_HOST')
@@ -396,6 +401,10 @@ def register():
         expose_flag = os.environ.get('EXPOSE_VERIFY_LINK', '0') == '1'
         smtp_configured = bool(smtp_host and smtp_user and smtp_pass)
         response_body = {'message': 'Registered successfully. Please check your email to verify.'}
+        response_body['email_sent'] = email_sent
+        if email_error:
+            response_body['email_error'] = email_error
+        # For local development or when explicitly allowed, include the verify link
         if expose_flag or not smtp_configured or 'localhost' in base_url or '127.0.0.1' in base_url:
             response_body['verify_link'] = verify_link
 
@@ -413,8 +422,25 @@ def verify():
         user = get_user_by_verification_token(token)
         if not user:
             return jsonify({'error': 'Invalid token'}), 400
+
+        # Token expiry enforcement (use created_at from user record)
+        try:
+            from datetime import datetime, timezone, timedelta
+            created_at = user.get('created_at')
+            if created_at:
+                created_dt = datetime.fromisoformat(created_at)
+                expiry_days = int(os.environ.get('VERIFY_TOKEN_EXPIRY_DAYS', '7'))
+                if created_dt.tzinfo is None:
+                    created_dt = created_dt.replace(tzinfo=timezone.utc)
+                if datetime.now(timezone.utc) > created_dt + timedelta(days=expiry_days):
+                    return jsonify({'error': 'Verification token expired'}), 400
+        except Exception:
+            # If parsing fails, continue but log
+            logger.debug('Failed to parse created_at for token expiry check')
+
         if user.get('is_verified'):
             return jsonify({'message': 'Already verified'})
+
         set_user_verified(user_id=user['id'], verified_at=get_current_timestamp())
         return jsonify({'message': 'Email verified successfully'})
     except Exception as e:
@@ -433,8 +459,6 @@ def login():
         user = get_user_by_email(email)
         if not user:
             return jsonify({'error': 'Invalid credentials'}), 401
-        if not user.get('is_verified'):
-            return jsonify({'error': 'Email not verified'}), 403
         try:
             if not verify_password(password, user['password_hash']):
                 return jsonify({'error': 'Invalid credentials'}), 401
@@ -447,6 +471,79 @@ def login():
     except Exception as e:
         logger.error(f"Error in login: {e}")
         return jsonify({'error': 'Login failed'}), 500
+
+
+# Simple in-memory rate limiter for resend (single-process only). Replace with Redis in prod.
+_resend_attempts: dict = {}
+_RESEND_WINDOW_SECONDS = int(os.environ.get('RESEND_WINDOW_SECONDS', '3600'))  # 1 hour
+_RESEND_MAX_PER_WINDOW = int(os.environ.get('RESEND_MAX_PER_WINDOW', '3'))
+
+
+@app.route('/auth/resend', methods=['POST'])
+def resend_verification():
+    try:
+        data = request.get_json() or {}
+        email = (data.get('email') or '').strip().lower()
+        if not email:
+            return jsonify({'error': 'Email is required'}), 400
+
+        user = get_user_by_email(email)
+        if not user:
+            # Don't reveal whether an email is registered
+            return jsonify({'message': 'If the email is registered, a verification link will be sent.'})
+
+        if user.get('is_verified'):
+            return jsonify({'message': 'Email already verified.'})
+
+        # Rate limiting
+        now_ts = int(time.time())
+        window_start = now_ts - _RESEND_WINDOW_SECONDS
+        attempts = _resend_attempts.get(email, [])
+        # prune old
+        attempts = [t for t in attempts if t >= window_start]
+        if len(attempts) >= _RESEND_MAX_PER_WINDOW:
+            return jsonify({'error': 'Too many resend requests. Try again later.'}), 429
+
+        # generate new token and persist
+        new_token = generate_token()
+        try:
+            set_verification_token(user_id=user['id'], token=new_token)
+        except Exception as db_e:
+            logger.error(f"Failed to set new verification token: {db_e}")
+            return jsonify({'error': 'Server error'}), 500
+
+        base_url = os.environ.get('APP_BASE_URL', 'http://localhost:5000')
+        verify_link = f"{base_url}/auth/verify?token={new_token}"
+
+        email_sent = False
+        email_error = None
+        try:
+            send_verification_email(email, verify_link)
+            email_sent = True
+        except Exception as e:
+            email_error = str(e)
+            logger.error(f"Resend email failed for {email}: {e}")
+
+        # record attempt
+        attempts.append(now_ts)
+        _resend_attempts[email] = attempts
+
+        response = {'message': 'If the email is registered, a verification link will be sent.', 'email_sent': email_sent}
+        if email_error:
+            response['email_error'] = email_error
+        # expose link in dev
+        expose_flag = os.environ.get('EXPOSE_VERIFY_LINK', '0') == '1'
+        smtp_host = os.environ.get('SMTP_HOST')
+        smtp_user = os.environ.get('SMTP_USER')
+        smtp_pass = os.environ.get('SMTP_PASS')
+        smtp_configured = bool(smtp_host and smtp_user and smtp_pass)
+        if expose_flag or not smtp_configured or 'localhost' in base_url or '127.0.0.1' in base_url:
+            response['verify_link'] = verify_link
+
+        return jsonify(response)
+    except Exception as e:
+        logger.error(f"Error in resend_verification: {e}")
+        return jsonify({'error': 'Internal server error'}), 500
 
 if __name__ == '__main__':
     port = int(os.environ.get('PORT', 5000))
