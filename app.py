@@ -187,14 +187,11 @@ def chat():
 
         answer = None
        
-
-        # Fallback to local legal model if remote AI fails
-        
-            try:
-                answer = get_legal_advice(question, language)
-                logger.info("Got answer from local legal model")
-            except Exception as local_err:
-                logger.warning(f"Local legal model failed: {local_err}")
+    try:
+        answer = get_legal_advice(question, language)
+        logger.info("Got answer from local legal model")
+    except Exception as local_err:
+            logger.warning(f"Local legal model failed: {local_err}")
 
         if not answer:
             return jsonify({'error': 'No answer available from Legal AI services'}), 502
