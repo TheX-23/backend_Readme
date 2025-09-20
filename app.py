@@ -117,18 +117,18 @@ def call_legal_ai_remote(question: str, language: str):
     if requests is None:
         logger.error("requests library not available for remote Legal AI calls")
         return None
-    
+
     # Prepare payload for lingosathi AI
     payload = {
         'message': question,
         'lang': language
     }
-    
+
     try:
         resp = requests.post(url, json=payload, timeout=15)
         resp.raise_for_status()
         data = resp.json()
-        
+
         # Extract response from lingosathi AI
         if isinstance(data, dict):
             if 'reply' in data and data['reply']:
@@ -137,7 +137,7 @@ def call_legal_ai_remote(question: str, language: str):
                 return data['answer']
             elif 'response' in data and data['response']:
                 return data['response']
-        
+
         return json.dumps(data, ensure_ascii=False)
     except Exception as e:
         logger.error(f"Lingosathi AI call failed: {e}")
@@ -462,12 +462,10 @@ def login():
         logger.error(f"Error in login: {e}")
         return jsonify({'error': 'Login failed'}), 500
 
-
 # Simple in-memory rate limiter for resend (single-process only). Replace with Redis in prod.
 _resend_attempts: dict = {}
 _RESEND_WINDOW_SECONDS = int(os.environ.get('RESEND_WINDOW_SECONDS', '3600'))  # 1 hour
 _RESEND_MAX_PER_WINDOW = int(os.environ.get('RESEND_MAX_PER_WINDOW', '3'))
-
 
 @app.route('/auth/resend', methods=['POST'])
 def resend_verification():
