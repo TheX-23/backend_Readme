@@ -2,6 +2,7 @@ import os
 import smtplib
 import ssl
 from email.message import EmailMessage
+from db import set_verification_token
 
 def send_verification_email(recipient_email: str, verify_link: str) -> None:
     """
