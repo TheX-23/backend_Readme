@@ -186,17 +186,10 @@ def chat():
         # Policy helpers are defined in backend/policy.py
 
         answer = None
-        
-        # First try to get answer from lingosathi AI
-        try:
-            answer = call_legal_ai_remote(question, language)
-            if answer:
-                logger.info("Got answer from lingosathi AI")
-        except Exception as remote_err:
-            logger.warning(f"Lingosathi AI failed: {remote_err}")
+       
 
         # Fallback to local legal model if remote AI fails
-        if not answer:
+        
             try:
                 answer = get_legal_advice(question, language)
                 logger.info("Got answer from local legal model")
