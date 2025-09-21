@@ -3,7 +3,7 @@ import json
 import sqlite3
 from typing import Any, Dict, List, Optional
 
-from db import set_verification_token
+
 # Resolve database path. Defaults to a file next to the backend folder.
 _DEFAULT_DB_PATH = os.environ.get(
     "NYAYSETU_DB_PATH",
@@ -279,6 +279,20 @@ def set_user_verified(user_id: int, verified_at: str, db_path: str = _DEFAULT_DB
         cur.execute(
             "UPDATE users SET is_verified = 1, verification_token = NULL, verified_at = ? WHERE id = ?",
             (verified_at, user_id),
+        )
+        conn.commit()
+    finally:
+        conn.close()
+
+
+def set_verification_token(user_id: int, token: str, db_path: str = _DEFAULT_DB_PATH) -> None:
+    """Set or replace a user's verification token (used for resend flows)."""
+    conn = get_db_connection(db_path)
+    try:
+        cur = conn.cursor()
+        cur.execute(
+            "UPDATE users SET verification_token = ?, is_verified = 0 WHERE id = ?",
+            (token, user_id),
         )
         conn.commit()
     finally:

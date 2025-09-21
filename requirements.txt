@@ -1,9 +1,31 @@
+# Consolidated requirements for this repo (runtime + dev)
+# Install with: pip install -r requirements-all.txt
+
+# Runtime / backend
 Flask==2.3.3
 Flask-CORS==4.0.0
 python-dotenv==1.0.0
-gunicorn==21.2.0
-Werkzeug==2.3.7
+requests==2.32.3
 PyJWT==2.8.0
 passlib==1.7.4
-requests==2.32.3
 reportlab==4.2.5
+deep-translator==1.11.4
+# Google Gemini client (optional)
+google-generativeai>=0.0.0
+google-auth>=2.0.0
+gunicorn==21.2.0
+Werkzeug==2.3.7
+
+# Optional / DB drivers
+# sqlite3 is in the Python stdlib (no install required)
+
+# Dev / testing / lint
+pytest==7.4.0
+pytest-cov==4.1.0
+mypy==1.8.0
+flake8==6.0.0
+
+# Notes:
+# - If you deploy to production, prefer installing only the runtime set (remove dev entries) or
+#   use a virtualenv per service (backend, backend-2) and install their specific requirement files.
+# - Pin exact versions for google-generativeai if you know the version to avoid surprises.

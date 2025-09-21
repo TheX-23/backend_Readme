@@ -1,7 +1,11 @@
 import os
 import smtplib
 import ssl
+import time
+import logging
 from email.message import EmailMessage
+
+logger = logging.getLogger(__name__)
 
 def send_verification_email(recipient_email: str, verify_link: str) -> None:
     """
@@ -22,6 +26,16 @@ def send_verification_email(recipient_email: str, verify_link: str) -> None:
 
     smtp_host = os.environ.get('SMTP_HOST', 'smtp.gmail.com')
     smtp_port = int(os.environ.get('SMTP_PORT', '587'))
+
+    # Retry / backoff configuration
+    try:
+        retries = int(os.environ.get('SMTP_RETRIES', '3'))
+    except Exception:
+        retries = 3
+    try:
+        backoff_base = float(os.environ.get('SMTP_BACKOFF_BASE', '1.0'))
+    except Exception:
+        backoff_base = 1.0
 
     msg = EmailMessage()
     msg['Subject'] = 'Verify your NyaySetu account'
@@ -51,19 +65,44 @@ def send_verification_email(recipient_email: str, verify_link: str) -> None:
     msg.add_alternative(html_body, subtype='html')
 
     context = ssl.create_default_context()
-    try:
-        # Use STARTTLS for port 587, SSL for 465
-        if smtp_port == 465:
-            with smtplib.SMTP_SSL(smtp_host, smtp_port, context=context, timeout=15) as server:
-                server.login(smtp_user, smtp_pass)
-                server.send_message(msg)
-        else:
-            with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as server:
-                server.ehlo()
-                server.starttls(context=context)
-                server.ehlo()
-                server.login(smtp_user, smtp_pass)
-                server.send_message(msg)
-    except Exception as e:
-        # Let caller log/handle the exception
-        raise
+
+    last_err = None
+    for attempt in range(1, max(1, retries) + 1):
+        try:
+            # Use STARTTLS for port 587, SSL for 465
+            if smtp_port == 465:
+                with smtplib.SMTP_SSL(smtp_host, smtp_port, context=context, timeout=15) as server:
+                    server.login(smtp_user, smtp_pass)
+                    server.send_message(msg)
+            else:
+                with smtplib.SMTP(smtp_host, smtp_port, timeout=15) as server:
+                    server.ehlo()
+                    server.starttls(context=context)
+                    server.ehlo()
+                    server.login(smtp_user, smtp_pass)
+                    server.send_message(msg)
+
+            logger.info("Verification email sent to %s (attempt %d)", recipient_email, attempt)
+            return
+        except Exception as e:
+            last_err = e
+            logger.warning(
+                "Failed to send verification email to %s (attempt %d/%d): %s",
+                recipient_email,
+                attempt,
+                retries,
+                e,
+            )
+            # Exponential backoff before next retry (unless this was the last attempt)
+            if attempt < retries:
+                sleep_for = backoff_base * (2 ** (attempt - 1))
+                try:
+                    time.sleep(sleep_for)
+                except Exception:
+                    pass
+
+    # If we reach here, all attempts failed
+    logger.error("All attempts to send verification email failed for %s", recipient_email)
+    # Re-raise the last exception so callers can handle/report it
+    if last_err:
+        raise last_err
