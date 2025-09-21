@@ -37,6 +37,7 @@ class LegalAdviceGenerator:
             'kn': 'kn',  # Kannada
             'ml': 'ml',  # Malayalam
             'pa': 'pa',  # Punjabi
+            'ka': 'ka',  # kannada 
         }
         
         # Legal context prompts for AI models
@@ -149,7 +150,7 @@ def get_gemini_answer(question: str) -> str:
 def get_legal_advice(question: str, language: str = 'en') -> str:
     """Main function to get legal advice with Gemini only (no Grok)"""
     if not question or not question.strip():
-        return "Please provide a valid legal question."
+        return "Could you please provide a question that addresses a specific legal issue."
     
     try:
         # Use Gemini only
